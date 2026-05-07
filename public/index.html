@@ -169,11 +169,28 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0
 .reset-btn{background:none;border:none;font-size:12px;font-family:var(--mono);color:var(--muted);cursor:pointer;text-decoration:underline;margin-top:12px;display:block;width:100%;text-align:center;}
 .reset-btn:hover{color:var(--text2);}
 
+/* Chain selector */
+.chain-selector{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+.chain-btn{flex:1;min-width:70px;padding:8px 10px;border:1px solid var(--rim2);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--mono);transition:all .2s;background:transparent;color:var(--muted);text-align:center;}
+.chain-btn:hover{border-color:var(--purple);color:var(--text);}
+.chain-btn.active{border-color:var(--purple);background:rgba(124,58,237,.15);color:var(--glow);}
+
+/* Score breakdown */
+.breakdown-section{margin-top:18px;}
+.breakdown-title{font-size:10px;font-weight:700;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.breakdown-chain{margin-bottom:14px;}
+.breakdown-chain-header{font-size:12px;font-weight:700;font-family:var(--mono);color:var(--text2);margin-bottom:6px;display:flex;justify-content:space-between;}
+.breakdown-item{display:flex;justify-content:space-between;font-size:11px;font-family:var(--mono);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);}
+.breakdown-label{color:var(--muted);}
+.breakdown-pts{color:var(--green);font-weight:700;}
+.breakdown-bonus{display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);padding:8px 0;border-top:1px solid var(--rim2);margin-top:6px;color:var(--cyan);font-weight:700;}
+
 @media(max-width:600px){
   .cred-fields{grid-template-columns:1fr;}
   .info-grid{grid-template-columns:1fr;}
   .share-btns{flex-direction:column;}
   .wallet-connect-row{flex-direction:column;}
+  .chain-selector{gap:4px;}
 }
 </style>
 </head>
@@ -222,27 +239,43 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0
     <!-- Step 1 — input -->
     <div id="step1-content">
 
+      <!-- Chain selector -->
+      <div class="input-label">Select Chain</div>
+      <div class="chain-selector" id="chain-selector">
+        <button class="chain-btn active" id="chain-eth" onclick="setChain('eth')">⟠ Ethereum</button>
+        <button class="chain-btn" id="chain-sol" onclick="setChain('sol')">◎ Solana</button>
+        <button class="chain-btn" id="chain-ada" onclick="setChain('ada')">∞ Cardano</button>
+        <button class="chain-btn" id="chain-midnight" onclick="setChain('midnight')">⬛ Midnight</button>
+        <button class="chain-btn" id="chain-all" onclick="setChain('all')">🌐 All Chains</button>
+      </div>
+
       <!-- Wallet connect -->
       <div class="input-label">Connect Wallet</div>
-      <div class="wallet-status" id="wallet-status">Scanning for wallets…</div>
+      <div class="wallet-status" id="wallet-status">Select a chain above</div>
       <div class="wallet-connect-row" id="wallet-btn-row">
-        <button class="btn-wallet" id="connect-btn" onclick="connectWallet()" disabled>
-          <span id="connect-btn-text">⊘ Detecting wallets…</span>
+        <button class="btn-wallet" id="connect-btn-eth" onclick="connectMetaMask()">
+          🦊 Connect MetaMask
+        </button>
+        <button class="btn-wallet" id="connect-btn-sol" onclick="connectPhantom()" style="display:none">
+          👻 Connect Phantom
+        </button>
+        <button class="btn-wallet" id="connect-btn-midnight" onclick="connectWallet()" style="display:none" disabled>
+          <span id="connect-btn-text">⊘ Detecting Midnight wallet…</span>
         </button>
       </div>
 
-      <div class="or-divider"><div class="or-line"></div><div class="or-text">or enter manually</div><div class="or-line"></div></div>
+      <div class="or-divider"><div class="or-line"></div><div class="or-text">or paste address</div><div class="or-line"></div></div>
 
-      <div class="input-label">Your Midnight Wallet Address</div>
+      <div class="input-label">Wallet Address</div>
       <div class="input-wrap">
-        <input class="input-field" id="addr-input" type="text" placeholder="mn_addr_preprod1..." spellcheck="false" autocomplete="off"/>
-        <div class="input-hint">Preprod address — starts with mn_addr_preprod1</div>
+        <input class="input-field" id="addr-input" type="text" placeholder="0x..." spellcheck="false" autocomplete="off"/>
+        <div class="input-hint" id="addr-hint">Ethereum address — starts with 0x</div>
       </div>
 
       <div class="status" id="status-msg"></div>
 
       <button class="btn btn-primary" id="verify-btn" onclick="verifyAddress()">
-        <span id="verify-btn-text">🔍 Verify on Midnight Preprod</span>
+        <span id="verify-btn-text">🔍 Score on Ethereum</span>
       </button>
     </div>
 
@@ -408,6 +441,17 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0
 const INDEXER = 'https://indexer.preprod.midnight.network/api/v3/graphql';
 const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws';
 const NIGHT_CONTRACT = '7473b82b398f6b8665541862a1165c6c5da379355f9c32dace36ed234b7cc711';
+const API_BASE = 'http://localhost:3001';
+
+let currentChain = 'eth';
+
+const CHAIN_CONFIG = {
+  eth:      { label:'Ethereum', icon:'⟠', placeholder:'0x...', hint:'Ethereum address — starts with 0x', btnText:'🔍 Score on Ethereum',         validate: a => /^0x[0-9a-fA-F]{40}$/.test(a), errMsg:'Valid Ethereum address required (0x + 40 hex chars)' },
+  sol:      { label:'Solana',   icon:'◎', placeholder:'Base58 public key…', hint:'Solana wallet — base58 encoded public key', btnText:'🔍 Score on Solana',   validate: a => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a), errMsg:'Valid Solana address required (32–44 base58 chars)' },
+  ada:      { label:'Cardano',  icon:'∞', placeholder:'addr1...', hint:'Cardano address — starts with addr1 or stake1', btnText:'🔍 Score on Cardano', validate: a => a.startsWith('addr1') || a.startsWith('stake1'), errMsg:'Valid Cardano address required (addr1... or stake1...)' },
+  midnight: { label:'Midnight', icon:'⬛', placeholder:'mn_addr_preprod…', hint:'Midnight address — starts with mn_addr_preprod1', btnText:'🔍 Score on Midnight', validate: a => a.startsWith('mn_addr'), errMsg:'Valid Midnight address required (mn_addr_preprod...)' },
+  all:      { label:'All Chains', icon:'🌐', placeholder:'0x… or addr1… or mn_addr…', hint:'Any address — chain auto-detected from format', btnText:'🔍 Score (auto-detect)', validate: a => a.length >= 8, errMsg:'Enter a valid wallet address' },
+};
 
 // Score config
 const SCORE_CONFIG = {
@@ -463,179 +507,241 @@ async function queryIndexer(query, variables) {
 
 async function verifyAddress() {
   const addr = document.getElementById('addr-input').value.trim();
+  const chain = currentChain;
+  const cfg = CHAIN_CONFIG[chain];
 
-  if (!addr) { showStatus('Please enter your Midnight wallet address.', 'error'); return; }
-  if (!addr.startsWith('mn_addr_preprod') && !addr.startsWith('mn_addr_undeployed')) {
-    showStatus('Please enter a valid Preprod address starting with mn_addr_preprod1...', 'error');
-    return;
+  // Auto-detect chain for 'all' mode
+  let resolvedChain = chain;
+  if (chain === 'all') {
+    if (/^0x[0-9a-fA-F]{40}$/.test(addr)) resolvedChain = 'eth';
+    else if (addr.startsWith('addr1') || addr.startsWith('stake1')) resolvedChain = 'ada';
+    else if (addr.startsWith('mn_addr')) resolvedChain = 'midnight';
+    else if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) resolvedChain = 'sol';
   }
+
+  if (!addr) { showStatus('Please enter a wallet address.', 'error'); return; }
+  if (!cfg.validate(addr)) { showStatus(cfg.errMsg, 'error'); return; }
 
   const btn = document.getElementById('verify-btn');
   btn.disabled = true;
-  document.getElementById('verify-btn-text').innerHTML = '<div class="spinner"></div> Querying Midnight Preprod...';
-  showStatus('🔍 Checking on-chain activity via Midnight indexer...', 'loading');
+  const resolvedLabel = CHAIN_CONFIG[resolvedChain]?.label || cfg.label;
+  document.getElementById('verify-btn-text').innerHTML = '<div class="spinner"></div> Scoring on ' + resolvedLabel + '…';
+  showStatus('🔍 Checking on-chain activity…', 'loading');
 
   try {
-    // Query 1 — check unshielded transactions for this address
-    let txCount = 0;
-    let firstTxDate = null;
-    try {
-      const txQuery = `
-        query GetTransactions($addr: UnshieldedAddress!) {
-          unshieldedTransactions(address: $addr) {
-            nodes {
-              hash
-              block { timestamp }
-            }
-          }
-        }
-      `;
-      const txData = await queryIndexer(txQuery, {addr: addr});
-      if (txData?.unshieldedTransactions?.nodes) {
-        txCount = txData.unshieldedTransactions.nodes.length;
-        if (txCount > 0) {
-          const timestamps = txData.unshieldedTransactions.nodes
-            .map(n => n.block?.timestamp)
-            .filter(Boolean)
-            .sort();
-          if (timestamps.length > 0) firstTxDate = new Date(timestamps[0]);
-        }
-      }
-    } catch(e) {
-      // Transaction query might not be available — continue
-    }
-
-    // Query 2 — check contract actions for Night Markets contract
-    let isNightDeployer = false;
-    let contractCount = 0;
-    let deployDate = null;
-    try {
-      const contractQuery = `
-        query GetContractActions($addr: HexEncoded!) {
-          contractActions(contractAddress: $addr) {
-            nodes {
-              __typename
-              ... on ContractDeploy {
-                transaction { block { timestamp } }
-              }
-            }
-          }
-        }
-      `;
-      const contractData = await queryIndexer(contractQuery, {addr: NIGHT_CONTRACT});
-      if (contractData?.contractActions?.nodes) {
-        const deploys = contractData.contractActions.nodes.filter(n => n.__typename === 'ContractDeploy');
-        if (deploys.length > 0) {
-          deployDate = new Date(deploys[0]?.transaction?.block?.timestamp);
-        }
-      }
-    } catch(e) {
-      // Continue without contract data
-    }
-
-    // Check if this IS the Night Markets deployer address
-    const nightDeployerAddress = 'mn_addr_preprod1etmexcm6rhwqtp3a3suvfwjfp6993u0e27uraxts9k2pmt7rhlvqnu2njv';
-    const nightDeployerAddress2 = 'mn_addr_preprod1s74q2udqmzzpud9rdkp7txa8elx3nece3t29yn6av3tfw552wtss65llx5';
-
-    if (addr === nightDeployerAddress || addr === nightDeployerAddress2) {
-      isNightDeployer = true;
-      contractCount = 1;
-      deployDate = new Date('2026-04-01T12:48:54');
-      // ZK contract calls don't appear in unshielded tx query (privacy by design)
-      // Actual on-chain activity: 6 circuit calls + full escrow flow verified on explorer
-      txCount = 6;
-    }
-
-    // Calculate score
-    let score = 0;
-    const actions = [];
-
-    if (isNightDeployer) {
-      score += SCORE_CONFIG.isNightMarkets;
-      actions.push({
-        icon: '⊘',
-        name: 'Night Markets Contract Deployed',
-        detail: 'ZK escrow marketplace — 6 circuits — Midnight Preprod — 01/04/2026',
-        pts: SCORE_CONFIG.isNightMarkets
-      });
-    } else if (contractCount > 0) {
-      score += SCORE_CONFIG.contractDeploy * contractCount;
-      actions.push({
-        icon: '📜',
-        name: 'Smart Contract Deployed',
-        detail: `${contractCount} contract(s) on Midnight Preprod`,
-        pts: SCORE_CONFIG.contractDeploy * contractCount
-      });
-    }
-
-    if (txCount > 0) {
-      const txPts = txCount * SCORE_CONFIG.perZkTx;
-      score += txPts;
-      actions.push({
-        icon: '⛓️',
-        name: 'ZK Circuit Calls',
-        detail: `${txCount} on-chain ZK transactions verified — Midnight Preprod`,
-        pts: txPts
-      });
-    }
-
-    if (isNightDeployer && txCount >= 6) {
-      score += SCORE_CONFIG.fullEscrowFlow;
-      actions.push({
-        icon: '🔐',
-        name: 'Full Escrow Flow Completed',
-        detail: 'createListing → fundEscrow → releaseEscrow — complete trade on-chain',
-        pts: SCORE_CONFIG.fullEscrowFlow
-      });
-    }
-
-    // If address found but no actions
-    if (actions.length === 0) {
-      actions.push({
-        icon: '🌱',
-        name: 'Midnight Wallet Verified',
-        detail: 'Address exists on Midnight Preprod — start building to earn points',
-        pts: 0
-      });
-    }
-
-    showScore(addr, score, actions, deployDate || firstTxDate || new Date());
-
-  } catch (err) {
-    // Fallback — if indexer query fails, still show basic credential
-    console.warn('Indexer query issue:', err.message);
-    
-    const nightDeployerAddress = 'mn_addr_preprod1etmexcm6rhwqtp3a3suvfwjfp6993u0e27uraxts9k2pmt7rhlvqnu2njv';
-    const nightDeployerAddress2 = 'mn_addr_preprod1s74q2udqmzzpud9rdkp7txa8elx3nece3t29yn6av3tfw552wtss65llx5';
-    
-    let score = 0;
-    let actions = [];
-
-    if (addr === nightDeployerAddress || addr === nightDeployerAddress2) {
-      score = 200;
-      actions = [{
-        icon: '⊘',
-        name: 'Night Markets Contract Deployed',
-        detail: 'ZK escrow marketplace — 6 circuits — Midnight Preprod — 01/04/2026',
-        pts: 200
-      }];
+    if (resolvedChain === 'midnight') {
+      await verifyMidnight(addr);
     } else {
-      actions = [{
-        icon: '🌱',
-        name: 'Midnight Address Verified',
-        detail: 'Valid Preprod address — build on Midnight to earn credentials',
-        pts: 0
-      }];
+      await verifyMultiChain(resolvedChain, addr);
     }
-
-    showScore(addr, score, actions, new Date());
   } finally {
     btn.disabled = false;
-    document.getElementById('verify-btn-text').innerHTML = '🔍 Verify on Midnight Preprod';
+    document.getElementById('verify-btn-text').textContent = cfg.btnText;
   }
 }
 
-function showScore(addr, score, actions, date) {
+async function verifyMidnight(addr) {
+  let txCount = 0;
+  let firstTxDate = null;
+  try {
+    const txQuery = `
+      query GetTransactions($addr: UnshieldedAddress!) {
+        unshieldedTransactions(address: $addr) {
+          nodes { hash block { timestamp } }
+        }
+      }
+    `;
+    const txData = await queryIndexer(txQuery, {addr});
+    if (txData?.unshieldedTransactions?.nodes) {
+      txCount = txData.unshieldedTransactions.nodes.length;
+      const timestamps = txData.unshieldedTransactions.nodes
+        .map(n => n.block?.timestamp).filter(Boolean).sort();
+      if (timestamps.length > 0) firstTxDate = new Date(timestamps[0]);
+    }
+  } catch(e) {}
+
+  let isNightDeployer = false;
+  let contractCount = 0;
+  let deployDate = null;
+  try {
+    const contractQuery = `
+      query GetContractActions($addr: HexEncoded!) {
+        contractActions(contractAddress: $addr) {
+          nodes {
+            __typename
+            ... on ContractDeploy { transaction { block { timestamp } } }
+          }
+        }
+      }
+    `;
+    const contractData = await queryIndexer(contractQuery, {addr: NIGHT_CONTRACT});
+    if (contractData?.contractActions?.nodes) {
+      const deploys = contractData.contractActions.nodes.filter(n => n.__typename === 'ContractDeploy');
+      if (deploys.length > 0) deployDate = new Date(deploys[0]?.transaction?.block?.timestamp);
+    }
+  } catch(e) {}
+
+  const nightDeployerAddress  = 'mn_addr_preprod1etmexcm6rhwqtp3a3suvfwjfp6993u0e27uraxts9k2pmt7rhlvqnu2njv';
+  const nightDeployerAddress2 = 'mn_addr_preprod1s74q2udqmzzpud9rdkp7txa8elx3nece3t29yn6av3tfw552wtss65llx5';
+
+  if (addr === nightDeployerAddress || addr === nightDeployerAddress2) {
+    isNightDeployer = true;
+    contractCount = 1;
+    deployDate = new Date('2026-04-01T12:48:54');
+    txCount = 6;
+  }
+
+  let score = 0;
+  const actions = [];
+
+  if (isNightDeployer) {
+    score += SCORE_CONFIG.isNightMarkets;
+    actions.push({ icon:'⊘', name:'Night Markets Contract Deployed', detail:'ZK escrow marketplace — 6 circuits — Midnight Preprod — 01/04/2026', pts:SCORE_CONFIG.isNightMarkets });
+  } else if (contractCount > 0) {
+    score += SCORE_CONFIG.contractDeploy * contractCount;
+    actions.push({ icon:'📜', name:'Smart Contract Deployed', detail:`${contractCount} contract(s) on Midnight Preprod`, pts:SCORE_CONFIG.contractDeploy * contractCount });
+  }
+
+  if (txCount > 0) {
+    const txPts = txCount * SCORE_CONFIG.perZkTx;
+    score += txPts;
+    actions.push({ icon:'⛓️', name:'ZK Circuit Calls', detail:`${txCount} on-chain ZK transactions — Midnight Preprod`, pts:txPts });
+  }
+
+  if (isNightDeployer && txCount >= 6) {
+    score += SCORE_CONFIG.fullEscrowFlow;
+    actions.push({ icon:'🔐', name:'Full Escrow Flow Completed', detail:'createListing → fundEscrow → releaseEscrow on-chain', pts:SCORE_CONFIG.fullEscrowFlow });
+  }
+
+  if (actions.length === 0) {
+    actions.push({ icon:'🌱', name:'Midnight Wallet Verified', detail:'Address on Midnight Preprod — build to earn points', pts:0 });
+  }
+
+  showScore(addr, score, actions, deployDate || firstTxDate || new Date(), 'Midnight Preprod');
+}
+
+async function verifyMultiChain(chain, addr) {
+  const cfg = CHAIN_CONFIG[chain];
+  // Try Night ID API server first
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(API_BASE + '/api/nightid/score/' + chain + '/' + encodeURIComponent(addr), { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      showMultiChainScore(addr, chain, data);
+      return;
+    }
+  } catch(e) { /* api server not running */ }
+
+  // Client-side fallback using public RPC endpoints
+  showStatus('⚡ Scoring from public RPC…', 'loading');
+  try {
+    const result = await scoreClientSide(chain, addr);
+    showMultiChainScore(addr, chain, result);
+  } catch(e) {
+    showStatus('Could not reach chain data. Run the Night ID API server locally for full scoring.', 'error');
+  }
+}
+
+async function scoreClientSide(chain, addr) {
+  let score = 0;
+  const actions = [];
+
+  if (chain === 'eth') {
+    try {
+      let txCount = 0;
+      let balanceEth = 0;
+      if (window.ethereum) {
+        const [countHex, balHex] = await Promise.all([
+          window.ethereum.request({ method:'eth_getTransactionCount', params:[addr,'latest'] }),
+          window.ethereum.request({ method:'eth_getBalance',          params:[addr,'latest'] }),
+        ]);
+        txCount    = parseInt(countHex, 16);
+        balanceEth = Number(BigInt(balHex)) / 1e18;
+      } else {
+        // Cloudflare public Ethereum gateway — CORS-enabled
+        const rpc = (method, params) => fetch('https://cloudflare-eth.com/', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({jsonrpc:'2.0',id:1,method,params}),
+        }).then(r => r.json()).then(d => d.result);
+        const [countHex, balHex] = await Promise.all([
+          rpc('eth_getTransactionCount', [addr,'latest']),
+          rpc('eth_getBalance',          [addr,'latest']),
+        ]);
+        txCount    = parseInt(countHex, 16);
+        balanceEth = Number(BigInt(balHex || '0x0')) / 1e18;
+      }
+      if (txCount > 0) {
+        const pts = Math.min(txCount * 2, 200);
+        score += pts;
+        actions.push({ icon:'⟠', name:'Ethereum Transactions', detail:`${txCount} txs on mainnet`, pts });
+      }
+      if (txCount >= 100) { score += 50; actions.push({ icon:'🏆', name:'Active ETH User', detail:'100+ lifetime transactions', pts:50 }); }
+      if (balanceEth >= 1) {
+        const pts = Math.min(Math.floor(balanceEth) * 10, 100);
+        score += pts;
+        actions.push({ icon:'💎', name:'ETH Holder', detail:balanceEth.toFixed(3) + ' ETH balance', pts });
+      }
+    } catch(e) { /* best effort */ }
+  }
+
+  if (chain === 'sol') {
+    try {
+      const res = await fetch('https://api.mainnet-beta.solana.com', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({jsonrpc:'2.0',id:1,method:'getSignaturesForAddress',params:[addr,{limit:100}]}),
+      });
+      const { result: sigs = [] } = await res.json();
+      if (sigs.length > 0) {
+        const pts = Math.min(sigs.length * 2, 200);
+        score += pts;
+        actions.push({ icon:'◎', name:'Solana Transactions', detail:`${sigs.length}${sigs.length===100?'+':''} txs on mainnet`, pts });
+        if (sigs.length >= 50) { score += 30; actions.push({ icon:'⚡', name:'Active SOL User', detail:'50+ Solana transactions', pts:30 }); }
+      }
+    } catch(e) { /* best effort */ }
+  }
+
+  if (chain === 'ada') {
+    // Blockfrost requires API key — show informational entry
+    actions.push({ icon:'∞', name:'Cardano Address Verified', detail:'Full scoring requires Night ID API server with Blockfrost key', pts:10 });
+    score += 10;
+  }
+
+  if (actions.length === 0) {
+    actions.push({ icon:'🌱', name:'Wallet Verified', detail:'Valid address — no on-chain activity found yet', pts:0 });
+  }
+
+  return { totalScore:score, actions, chain, address:addr, clientSide:true };
+}
+
+function showMultiChainScore(addr, chain, data) {
+  const score   = data.totalScore ?? 0;
+  const network = (CHAIN_CONFIG[chain]?.label ?? chain) + ' Mainnet';
+  const actions = [];
+
+  if (data.breakdowns) {
+    // Full API server response format
+    data.breakdowns.forEach(bd => {
+      const ico = { eth:'⟠', sol:'◎', ada:'∞', midnight:'⬛' }[bd.chain] || '🔗';
+      bd.items.forEach(item => {
+        if (item.pts > 0) actions.push({ icon:ico, name:item.label, detail:'Verified on ' + bd.chain.toUpperCase(), pts:item.pts });
+      });
+    });
+    // Cross-chain bonus items
+    const chainTotal = data.breakdowns.reduce((s,b) => s + b.score, 0);
+    if (score > chainTotal) {
+      actions.push({ icon:'🌐', name:'Multi-Chain Bonus', detail:data.breakdowns.length + ' active chains detected', pts:score-chainTotal });
+    }
+  } else if (data.actions) {
+    data.actions.forEach(a => actions.push(a));
+  }
+
+  showScore(addr, score, actions, new Date(), network);
+}
+
+function showScore(addr, score, actions, date, network = 'Midnight Preprod') {
   hideStatus();
   setStep(3);
 
@@ -643,8 +749,8 @@ function showScore(addr, score, actions, date) {
   const shortAddr = addr.slice(0, 20) + '...' + addr.slice(-8);
 
   // DID — deterministic from address
-  const didSuffix = addr.replace(/^mn_addr_preprod1/, '').slice(0, 20);
-  const did = 'did:midnight:preprod:' + didSuffix;
+  const didSuffix = addr.replace(/^mn_addr_preprod1/, '').replace(/^0x/, '').slice(0, 20);
+  const did = 'did:midnight:' + didSuffix;
 
   // NIGHT token rewards (1 NIGHT per 10 pts)
   const nightReward = Math.floor(score / 10);
@@ -661,7 +767,7 @@ function showScore(addr, score, actions, date) {
   document.getElementById('cf-night').textContent = nightReward + ' NIGHT';
   document.getElementById('cf-date').textContent = date.toLocaleDateString('en-AU');
   document.getElementById('cf-did').textContent = did;
-  document.getElementById('cred-sub').textContent = shortAddr + ' · Midnight Preprod';
+  document.getElementById('cred-sub').textContent = shortAddr + ' · ' + network;
 
   // Score bar
   document.getElementById('score-bar-val').textContent = score + ' / ' + (score >= 1000 ? '1000' : nextLevel.min) + ' pts';
@@ -688,7 +794,7 @@ function showScore(addr, score, actions, date) {
   `).join('');
 
   // Share text
-  const shareText = `🪪 Night Builder Credential\n\nDID: ${did}\nScore: ${score} pts\nLevel: ${level.name}\nNIGHT Earned: ${nightReward} NIGHT\nNetwork: Midnight Preprod\nVerified: ${date.toLocaleDateString('en-AU')}\nEpoch: v1 · KYC Midnight\n\nVerify: kingmunz1994-lgtm.github.io/night-markets/night-identity.html\nBuilt on Midnight Network 🌙`;
+  const shareText = `🪪 Night Builder Credential\n\nDID: ${did}\nScore: ${score} pts\nLevel: ${level.name}\nNIGHT Earned: ${nightReward} NIGHT\nNetwork: ${network}\nVerified: ${date.toLocaleDateString('en-AU')}\nEpoch: v1 · KYC Midnight\n\nVerify: kingmunz1994-lgtm.github.io/night-id/\nBuilt on Midnight Network 🌙`;
   document.getElementById('share-text').textContent = shareText;
 
   // Show score section
@@ -731,6 +837,111 @@ function resetForm() {
   hideStatus();
 }
 
+// ─── Chain Selector ────────────────────────────────────────────────────────────
+
+function setChain(chain) {
+  currentChain = chain;
+  const cfg = CHAIN_CONFIG[chain];
+
+  document.querySelectorAll('.chain-btn').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.getElementById('chain-' + chain);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  document.getElementById('addr-input').placeholder = cfg.placeholder;
+  document.getElementById('addr-input').value = '';
+  document.getElementById('addr-hint').textContent = cfg.hint;
+  document.getElementById('verify-btn-text').textContent = cfg.btnText;
+
+  const ethBtn  = document.getElementById('connect-btn-eth');
+  const solBtn  = document.getElementById('connect-btn-sol');
+  const midBtn  = document.getElementById('connect-btn-midnight');
+  ethBtn.style.display = (chain === 'eth' || chain === 'all') ? '' : 'none';
+  solBtn.style.display = (chain === 'sol') ? '' : 'none';
+  midBtn.style.display = (chain === 'midnight') ? '' : 'none';
+
+  const statusEl = document.getElementById('wallet-status');
+  if (chain === 'midnight') {
+    updateConnectBtn();
+  } else if (chain === 'ada') {
+    statusEl.textContent = 'Cardano — paste your addr1 address below';
+    statusEl.className = 'wallet-status';
+  } else if (chain === 'all') {
+    statusEl.textContent = 'Paste any address — chain auto-detected from format';
+    statusEl.className = 'wallet-status';
+  } else if (chain === 'eth') {
+    if (window.ethereum) {
+      statusEl.textContent = 'MetaMask detected — click to connect';
+      statusEl.className = 'wallet-status ok';
+    } else {
+      statusEl.textContent = 'MetaMask not detected — paste your 0x address below';
+      statusEl.className = 'wallet-status';
+    }
+  } else if (chain === 'sol') {
+    if (window.solana?.isPhantom) {
+      statusEl.textContent = 'Phantom detected — click to connect';
+      statusEl.className = 'wallet-status ok';
+    } else {
+      statusEl.textContent = 'Phantom not detected — paste your Solana address below';
+      statusEl.className = 'wallet-status';
+    }
+  }
+  hideStatus();
+}
+
+async function connectMetaMask() {
+  if (!window.ethereum) {
+    const s = document.getElementById('wallet-status');
+    s.textContent = 'MetaMask not installed — get it at metamask.io';
+    s.className = 'wallet-status err';
+    return;
+  }
+  const btn = document.getElementById('connect-btn-eth');
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  try {
+    const accounts = await window.ethereum.request({ method:'eth_requestAccounts' });
+    if (!accounts?.length) throw new Error('No accounts returned');
+    document.getElementById('addr-input').value = accounts[0];
+    document.getElementById('wallet-status').textContent = '✓ MetaMask connected — address auto-filled';
+    document.getElementById('wallet-status').className = 'wallet-status ok';
+    btn.textContent = '✓ MetaMask Connected';
+    setTimeout(() => verifyAddress(), 400);
+  } catch(err) {
+    document.getElementById('wallet-status').textContent = 'MetaMask: ' + (err.message || 'Connection rejected');
+    document.getElementById('wallet-status').className = 'wallet-status err';
+    btn.textContent = '🦊 Connect MetaMask';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function connectPhantom() {
+  if (!window.solana?.isPhantom) {
+    const s = document.getElementById('wallet-status');
+    s.textContent = 'Phantom not installed — get it at phantom.app';
+    s.className = 'wallet-status err';
+    return;
+  }
+  const btn = document.getElementById('connect-btn-sol');
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  try {
+    const resp = await window.solana.connect();
+    const addr = resp.publicKey.toString();
+    document.getElementById('addr-input').value = addr;
+    document.getElementById('wallet-status').textContent = '✓ Phantom connected — address auto-filled';
+    document.getElementById('wallet-status').className = 'wallet-status ok';
+    btn.textContent = '✓ Phantom Connected';
+    setTimeout(() => verifyAddress(), 400);
+  } catch(err) {
+    document.getElementById('wallet-status').textContent = 'Phantom: ' + (err.message || 'Connection rejected');
+    document.getElementById('wallet-status').className = 'wallet-status err';
+    btn.textContent = '👻 Connect Phantom';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ─── Multi-Wallet Connect — DApp Connector v4 ──────────────────────────────────
 // Supports: Lace (mnLace legacy), 1AM (midnight#ready UUID), GSD (io.shielded.gsd),
 //           Nocturne, and any future wallet that implements the spec.
@@ -767,10 +978,12 @@ window.addEventListener('midnight#ready', (event) => {
 });
 
 function updateConnectBtn() {
+  // Only relevant when Midnight chain is selected
+  if (currentChain !== 'midnight') return;
   const wallets = niDetectAllWallets();
   const statusEl = document.getElementById('wallet-status');
   const row = document.getElementById('wallet-btn-row');
-  const btn = document.getElementById('connect-btn');
+  const btn = document.getElementById('connect-btn-midnight');
   if (!statusEl || !btn) return;
 
   if (wallets.length === 0) {
@@ -785,17 +998,14 @@ function updateConnectBtn() {
   }
 
   if (wallets.length === 1) {
-    // Single wallet — show its name
     statusEl.textContent = wallets[0].name + ' detected — click to connect';
     statusEl.className = 'wallet-status ok';
     btn.disabled = false;
     document.getElementById('connect-btn-text').textContent = '⊘ Connect ' + wallets[0].name;
   } else {
-    // Multiple wallets — render individual buttons
     statusEl.textContent = wallets.length + ' wallets detected — choose one:';
     statusEl.className = 'wallet-status ok';
-    btn.style.display = 'none'; // hide the single button
-    // Clear old dynamic buttons
+    btn.style.display = 'none';
     document.querySelectorAll('.ni-wallet-dyn-btn').forEach(el => el.remove());
     wallets.forEach(w => {
       const b = document.createElement('button');
@@ -822,7 +1032,7 @@ async function doConnect(key) {
   const walletEntry = _niDetectedWallets[key] || window.midnight?.[key];
   if (!walletEntry) { document.getElementById('wallet-status').textContent = 'Wallet not found'; return; }
   const wName = walletEntry.name || 'Midnight Wallet';
-  const btn = document.getElementById('connect-btn');
+  const btn = document.getElementById('connect-btn-midnight');
   if (btn) { btn.disabled = true; }
   document.getElementById('connect-btn-text').innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> Connecting…';
   document.getElementById('wallet-status').textContent = 'Approve in ' + wName + '…';
@@ -952,8 +1162,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('addr-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') verifyAddress();
   });
-  // Check for wallet on load and after a short delay (extension may inject after DOM ready)
-  updateConnectBtn();
+  // Initialise chain selector to ETH
+  setChain('eth');
+  // Check for Midnight wallet and after delay (extension may inject after DOM ready)
   setTimeout(updateConnectBtn, 1500);
   // Start live feed
   fetchFeedEvents();
