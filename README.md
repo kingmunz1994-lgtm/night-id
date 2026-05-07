@@ -1,10 +1,10 @@
 <div align="center">
 
-# Night ID — ZK Identity on Midnight
+# Night ID — Zero-Knowledge Identity on Midnight Network
+
+> *Prove what you built. Prove who you are. Share nothing else.*
 
 </div>
-
-> *Prove what you built. Share nothing else.*
 
 ---
 
@@ -22,9 +22,13 @@
 
 ## What is Night ID?
 
-Night ID is a zero-knowledge identity layer for the Midnight Network. Register a `.night` name tied to your wallet, then issue and share verifiable credentials about your on-chain activity — without exposing your address, balance, or any personal data.
+Night ID is a zero-knowledge identity layer for the Midnight Network. Three systems in one:
 
-Every credential is backed by real on-chain data queried live from the Midnight Preprod indexer. You prove. The network confirms. Nothing else leaves your device.
+1. **`.night` Name Registry** — claim a human-readable name tied to your wallet commitment, resolved on-chain
+2. **ZK Credential System** — trusted issuers (KYC partners, institutions) grant private attributes; holders prove facts without revealing data
+3. **Night Score** — cross-ecosystem reputation built from real on-chain actions, privately accumulated
+
+Every credential is backed by real on-chain data. You prove. The network confirms. Nothing else leaves your device.
 
 **[→ Live Demo](https://kingmunz1994-lgtm.github.io/night-id)**
 
@@ -34,19 +38,21 @@ Every credential is backed by real on-chain data queried live from the Midnight 
 
 Night ID is Midnight-native from wallet connection to credential issuance.
 
-**Built on Midnight** — Identity anchoring, DID generation, and ZK credential signing all operate on the Midnight Network. The Night Markets Escrow contract (`7473b82b398f6b8665541862a1165c6c5da379355f9c32dace36ed234b7cc711`) on Midnight Preprod is the on-chain source of truth for builder credentials.
+**Built on Midnight** — The `NightID.compact` contract implements all three identity systems on-chain. `.night` name registration, credential issuance, attribute proofs, Night Score events, and admin initialization are all Compact circuits with ZK proofs generated client-side.
 
-**Integrates with Midnight** — Wallet detection uses the Midnight DApp Connector API. Lace wallet (`window.midnight.mnLace`) and 1AM wallet (`midnight#ready` UUID injection) are both supported natively. Any future wallet implementing the spec connects automatically.
+**Integrates with Midnight** — Wallet detection uses the Midnight DApp Connector API. Lace (`window.midnight.mnLace`) and 1AM (`midnight#ready` UUID injection) are both supported natively.
 
-**Extends Midnight** — Night ID ships the Brick Towers `identity-api` pattern to the ecosystem: HTTP credential issuance, W3C DID anchoring (`did:midnight:preprod:`), and ZK-signed builder scores that travel with a user across every Midnight application.
+**Extends Midnight** — Night ID ships W3C VC Data Model v2.0-compatible credentials, the Brick Towers `identity-api` pattern, and the `.night` name service as open-source Compact primitives the entire ecosystem can build on.
 
 ---
 
 ## Features
 
-**🪪 .night Name Registration** — Claim a `.night` name on the Midnight Network, linked to your wallet address. Your name is your on-chain identity — portable, private, yours.
+**🪪 .night Name Registry** — Claim a human-readable `.night` name on Midnight. The name hash is published on-chain; the actual name string stays private. ZK-prove ownership to any app in the ecosystem without revealing which name you hold.
 
-**🏗️ Night Score — ZK Builder Credential** — Night Score is your proof of work on Midnight. It is calculated from real on-chain activity queried directly from the Midnight Preprod GraphQL indexer: contracts deployed, ZK circuit calls made, and escrow flows completed. The score is deterministic and cannot be purchased or gamed.
+**🔒 ZK Credential System** — Trusted issuers grant attributes (KYC level, age, country, income range). Holders prove any condition — `age >= 18`, `kycLevel >= 2`, `income between X and Y` — with a single ZK proof. Seven operators supported: `==`, `<`, `>`, `<=`, `>=`, `exists`, `between`. No PII ever touches the chain.
+
+**🏗 Night Score — ZK Builder Credential** — Score is calculated from real on-chain activity: contracts deployed, ZK circuit calls, escrow flows completed. Score root is published on-chain; raw value stays private. Prove your score is above any threshold — applications see `score >= 650`, not the number.
 
 | Score Range | Level |
 |---|---|
@@ -56,67 +62,96 @@ Night ID is Midnight-native from wallet connection to credential issuance.
 | 600–999 | 🟢 Founder |
 | 1000+ | 🌟 Architect |
 
-**🔒 ZK Credentials** — Prove statements about yourself without revealing the underlying data. Example credentials include proving you have built on Midnight, completed a full escrow flow (`createListing → fundEscrow → releaseEscrow`), or earned above a threshold of `tNIGHT` — all without disclosing your balance or address.
+**🔑 Real Wallet Detection** — DApp Connector API polled on load and on `midnight#ready` events. Lace and 1AM both detected automatically. Any future wallet implementing the spec connects without code changes.
 
-**🔑 Real Wallet Detection** — The DApp Connector API is polled on page load and on `midnight#ready` events, detecting:
-- **Lace** — via `window.midnight.mnLace` (static key)
-- **1AM** — via UUID injection on `midnight#ready`
-- Any wallet implementing the Midnight DApp Connector spec
+**⛓ Live Contract Activity Feed** — Real `ContractDeploy`, `ContractCall`, and `ContractUpdate` events from the Night Markets Escrow contract polled live from the Midnight indexer every 30 seconds. No mock data.
 
-When a wallet is found, the address is auto-filled and verification runs immediately. Manual address entry is also supported for wallets not yet injected.
-
-**⛓️ Live Contract Activity Feed** — The bottom of the page shows a live feed of `ContractDeploy`, `ContractCall`, and `ContractUpdate` events for the Night Markets contract, polled from the real Midnight Preprod indexer every 30 seconds. No mock data, no simulation.
-
-**🌐 Share to X / Discord** — Export your credential as a formatted block and post directly to X (with pre-filled tweet text) or copy it as a Discord code block for pasting into any server.
-
-**📡 Fully Client-Side** — Night ID has no backend. All indexer queries run directly from the browser to the Midnight Preprod GraphQL endpoint (`https://indexer.preprod.midnight.network/api/v3/graphql`). Nothing is proxied, logged, or stored.
+**🌐 Share Credentials** — Export your Night Score credential as a formatted block and post to X or copy as a Discord code block. Your proof of work, portable across the internet.
 
 ---
 
 ## Privacy Model
 
-Night ID is built on one rule: the credential proves, it does not reveal.
+Night ID operates on one rule: the credential proves, it does not reveal.
 
-When you verify your address, the indexer returns on-chain facts — transaction counts, contract interactions, timestamps. Night ID converts those facts into a score and a W3C DID. Your raw address is never included in the credential. Your balance is never queried. No cookies, no analytics, no server logs.
+- **Names**: only the name hash is public — the actual `.night` name is private
+- **Credentials**: only commitments (hashes) go on-chain — KYC docs, passport, DOB never touched
+- **Night Score**: only the Merkle root is public — raw score value stays private
+- **Attribute proofs**: verifier receives a boolean result — the underlying value never disclosed
+- **Income proofs**: verifier learns `income >= minIncome && income <= maxIncome` — not the figure
 
-The ZK proof is the credential. The credential is the identity.
+No personal data. No surveillance. Prove everything, reveal nothing.
+
+---
+
+## Smart Contract — NightID.compact
+
+`NightID.compact` is a three-system Compact contract ready for deployment on the Midnight Network.
+
+```
+contracts/
+└── NightID.compact    Three-system ZK identity contract (Compact v0.20)
+```
+
+### On-Chain Ledger State
+
+```compact
+// Name Registry
+export ledger nameOwner:       Map<Bytes<32>, Bytes<32>>;
+export ledger nameTarget:      Map<Bytes<32>, Bytes<32>>;
+export ledger nameTaken:       Map<Bytes<32>, Boolean>;
+export ledger totalNames:      Uint<32>;
+
+// Credential Registry
+export ledger credentialRoot:  Map<Bytes<32>, Bytes<32>>;
+export ledger issuerTrusted:   Map<Bytes<32>, Boolean>;
+
+// Night Score
+export ledger scoreRoot:       Map<Bytes<32>, Bytes<32>>;
+export ledger isRevoked:       Map<Bytes<32>, Boolean>;
+```
+
+### Key Circuits
+
+| System | Circuit | Description |
+|---|---|---|
+| **Name Registry** | `registerName` | Claim a `.night` name — hash on-chain, string stays private |
+| | `transferName` | Transfer name to new target commitment |
+| | `releaseName` | Release (burn) a name permanently |
+| | `resolveName` | Look up target commitment for a name hash |
+| | `proveNameOwnership` | ZK-prove you own a registered name |
+| **Credentials** | `registerIssuer` | Admin registers a trusted credential issuer |
+| | `issueCredential` | Trusted issuer grants an attribute to a holder |
+| | `proveAttribute` | ZK-prove any attribute with 7 operators |
+| | `proveIdentity` | Prove KYC level + age + country in one call |
+| | `revokeCredential` | Holder or issuer revokes a credential |
+| **Night Score** | `recordScoreEvent` | Record a score-building event (8 types) |
+| | `proveScore` | ZK-prove score is above a threshold |
+| | `proveIncomeRange` | ZK-prove income is within a range |
+
+### Compiling and Deploying
+
+```bash
+# In the night-markets repo (NightID.compact lives there):
+npm run compile:nightid   # → contracts/managed/night-id/
+
+# Deploy to Midnight Network:
+npm run deploy
+```
 
 ---
 
 ## Credential Issuance
 
-Night ID implements the **Brick Towers `identity-api`** credential issuance pattern.
+Night ID implements the **W3C Verifiable Credentials Data Model v2.0** for off-chain credential envelopes, with on-chain commitment anchoring via Compact circuits.
 
 | Field | Value |
 |---|---|
-| **Issuer** | Night Markets Protocol |
-| **Standard** | W3C DID · Midnight ZK |
-| **DID format** | `did:midnight:preprod:<suffix>` |
+| **Issuer** | Night Markets Protocol / trusted KYC partners |
+| **Standard** | W3C VC v2.0 · Midnight ZK |
+| **On-chain** | Credential commitment hash only — no PII |
 | **Signing key** | EC P-256 · ZK verified |
-| **Privacy** | Zero personal data |
-
-Supported credential types:
-
-- **Age proof** (Brick Towers) — prove you meet an age threshold without revealing your date of birth
-- **Midnames DID anchoring** — your `.night` name is anchored to your DID on-chain
-- **KYC Midnight epoch v1** — the first epoch of the Midnight identity standard
-
----
-
-## On-Chain Data
-
-Night ID reads from the following on Midnight Preprod:
-
-| Source | Details |
-|---|---|
-| **Night Markets Escrow** | `7473b82b398f6b8665541862a1165c6c5da379355f9c32dace36ed234b7cc711` |
-| **GraphQL indexer** | `https://indexer.preprod.midnight.network/api/v3/graphql` |
-| **Network** | Midnight Preprod |
-| **Deploy block** | 127,350 |
-
-Queries used:
-- `unshieldedTransactions(address: $addr)` — transaction count and first-activity date
-- `contractActions(contractAddress: $addr)` — deploys, circuit calls, contract updates
+| **Privacy** | Zero personal data on-chain |
 
 ---
 
@@ -128,8 +163,10 @@ Queries used:
 | Any smart contract deployed | +100 per contract |
 | ZK circuit call on-chain | +15 per transaction |
 | Full escrow flow completed | +75 bonus |
+| Night Work task verified | +20 per task |
+| Night Poker hand played | +2 per hand |
 
-NIGHT token rewards are derived from the score at a rate of 1 NIGHT per 10 points and displayed on the issued credential.
+NIGHT token rewards: 1 NIGHT per 10 score points.
 
 ---
 
@@ -140,50 +177,35 @@ NIGHT token rewards are derived from the score at a rate of 1 NIGHT per 10 point
 git clone https://github.com/kingmunz1994-lgtm/night-id.git
 cd night-id
 
-# Run locally — no build step required
-npm run dev
-# → http://localhost:3003
+# Serve locally — no build step required
+npm run dev          # → http://localhost:3003
 ```
-
-Or open `public/index.html` directly in a browser — it works without a server.
 
 **To connect a wallet:**
+1. Install [Lace](https://midnight.network/lace) or [1AM](https://1am.xyz)
+2. Open Night ID — wallet detected automatically on load
+3. Approve the connection — address auto-fills, Night Score loads immediately
 
-1. Install [Lace](https://midnight.network/lace), [1AM](https://1am.xyz), or any Midnight DApp Connector wallet
-2. Open Night ID — the wallet is detected automatically
-3. Approve the connection request in your wallet
-4. Your address is auto-filled and your Night Score loads immediately
-
-**To verify manually:**
-
-1. Paste any `mn_addr_preprod1...` address into the input field
-2. Press Enter or click **Verify on Midnight Preprod**
-3. Your credential is issued from live indexer data
+**Manual verification:** Paste any `mn_addr1...` address and press Enter.
 
 ---
 
-## Deployment
+## The Night Ecosystem
 
-Night ID is deployed as a static site via GitHub Pages — no server, no backend, no infrastructure to manage.
+Night ID is the identity layer for the entire Night ecosystem on Midnight Network.
 
-```bash
-# Deploy: push public/ to gh-pages branch
-# Or configure GitHub Pages to serve from /public on main
-```
-
-The live demo is served at: `https://kingmunz1994-lgtm.github.io/night-id`
-
----
-
-## Part of the Night Ecosystem
-
-Night ID is one component of the Night protocol suite:
-
-| Project | Description |
-|---|---|
-| [Night Markets](https://kingmunz1994-lgtm.github.io/night-markets) | ZK-private global marketplace on Midnight |
-| **Night ID** | ZK identity and builder credentials |
-| [Night Fun](https://kingmunz1994-lgtm.github.io/night-fun) | Social layer on Midnight |
+| App | What it does | Live |
+|---|---|---|
+| [Night Hub](https://github.com/kingmunz1994-lgtm/night-hub) | Central launchpad | [↗](https://kingmunz1994-lgtm.github.io/night-hub/) |
+| [Night Markets](https://github.com/kingmunz1994-lgtm/night-markets) | ZK global marketplace + escrow | [↗](https://kingmunz1994-lgtm.github.io/night-markets/) |
+| [Night Poker](https://github.com/kingmunz1994-lgtm/night-poker) | Provably fair ZK Texas Hold'em | [↗](https://kingmunz1994-lgtm.github.io/night-poker/) |
+| [Night Fun](https://github.com/kingmunz1994-lgtm/night-fun) | ZK token launchpad | [↗](https://kingmunz1994-lgtm.github.io/night-fun/) |
+| [**Night ID**](https://github.com/kingmunz1994-lgtm/night-id) | **ZK identity + .night names + Night Score** | [↗](https://kingmunz1994-lgtm.github.io/night-id/) |
+| [Night Lend](https://github.com/kingmunz1994-lgtm/night-lend) | ZK lending at 75% LTV | [↗](https://kingmunz1994-lgtm.github.io/night-lend/) |
+| [Night Work](https://github.com/kingmunz1994-lgtm/night-work) | ZK task marketplace | [↗](https://kingmunz1994-lgtm.github.io/night-work/) |
+| [Night Save](https://github.com/kingmunz1994-lgtm/night-save) | ZK vault + sUSD stablecoin | [↗](https://kingmunz1994-lgtm.github.io/night-save/) |
+| [Night Biz](https://github.com/kingmunz1994-lgtm/night-biz) | ZK business loyalty tokens | [↗](https://kingmunz1994-lgtm.github.io/night-biz/) |
+| [Night Store](https://github.com/kingmunz1994-lgtm/night-store) | ZK merch shop | [↗](https://kingmunz1994-lgtm.github.io/night-store/) |
 
 ---
 
@@ -195,8 +217,8 @@ MIT © Night ID Contributors — *Built on the Midnight Network.*
 
 <div align="center">
 
-*"Your proof of work. Nothing more, nothing less."*
+*"Your proof of work. Your proof of identity. Nothing more."*
 
-[🌐 Live Demo](https://kingmunz1994-lgtm.github.io/night-id) · [🌑 Midnight Network](https://midnight.network) · [⛓️ Midnight Explorer](https://explorer.preprod.midnight.network/contracts/7473b82b398f6b8665541862a1165c6c5da379355f9c32dace36ed234b7cc711)
+[🌐 Live Demo](https://kingmunz1994-lgtm.github.io/night-id) · [🌑 Midnight Network](https://midnight.network) · [📄 Contract](https://github.com/kingmunz1994-lgtm/night-markets/blob/main/contracts/NightID.compact)
 
 </div>
