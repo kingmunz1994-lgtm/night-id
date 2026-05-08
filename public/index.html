@@ -441,7 +441,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0
 const INDEXER = 'https://indexer.preprod.midnight.network/api/v3/graphql';
 const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws';
 const NIGHT_CONTRACT = '7473b82b398f6b8665541862a1165c6c5da379355f9c32dace36ed234b7cc711';
-const API_BASE = 'https://night-id-api.fly.dev';
+const API_BASE = 'https://night-markets-94-production.up.railway.app';
 
 let currentChain = 'eth';
 
@@ -621,15 +621,23 @@ async function verifyMidnight(addr) {
 }
 
 async function verifyMultiChain(chain, addr) {
-  const cfg = CHAIN_CONFIG[chain];
-  // Try Night ID API server first
+  // Try Night ID API server first (chain score + app score in parallel)
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
-    const res = await fetch(API_BASE + '/api/nightid/score/' + chain + '/' + encodeURIComponent(addr), { signal: controller.signal });
+    const [chainRes, appRes] = await Promise.allSettled([
+      fetch(API_BASE + '/api/nightid/score/' + chain + '/' + encodeURIComponent(addr), { signal: controller.signal }),
+      fetch(API_BASE + '/api/nightid/action-score/' + encodeURIComponent(addr)),
+    ]);
     clearTimeout(timer);
-    if (res.ok) {
-      const data = await res.json();
+    if (chainRes.status === 'fulfilled' && chainRes.value.ok) {
+      const data = await chainRes.value.json();
+      const appData = appRes.status === 'fulfilled' && appRes.value.ok ? await appRes.value.json() : null;
+      if (appData?.byApp) {
+        data.appScore = appData.total ?? 0;
+        data.byApp = appData.byApp;
+        data.totalScore = (data.totalScore ?? 0) + data.appScore;
+      }
       showMultiChainScore(addr, chain, data);
       return;
     }
@@ -736,6 +744,17 @@ function showMultiChainScore(addr, chain, data) {
     }
   } else if (data.actions) {
     data.actions.forEach(a => actions.push(a));
+  }
+
+  // App activity from Night ecosystem
+  const APP_ICONS = { 'night-markets':'🛒','night-poker':'🃏','night-fun':'🚀','night-lend':'💸','night-save':'🏦','night-work':'⚙️','night-biz':'🏢' };
+  if (data.byApp) {
+    Object.entries(data.byApp).forEach(([appId, pts]) => {
+      if (pts > 0) {
+        const label = appId.replace('night-', 'Night ').replace(/\b\w/g, c => c.toUpperCase());
+        actions.push({ icon: APP_ICONS[appId] ?? '🌙', name: label, detail: 'Night ecosystem activity', pts });
+      }
+    });
   }
 
   showScore(addr, score, actions, new Date(), network);
