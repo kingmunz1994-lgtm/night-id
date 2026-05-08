@@ -194,7 +194,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0
   </nav>
 
   <div class="hero">
-    <div class="hero-badge"><span class="badge-dot"></span>Night Identity — Beta — Midnight Preprod</div>
+    <div class="hero-badge"><span class="badge-dot"></span>Night Identity — Multi-chain ZK Reputation</div>
     <h1 class="hero-title">Prove what you<br><span>built.</span></h1>
     <p class="hero-sub">ZK credentials for everyone who builds. Enter your Midnight wallet address and Night Identity verifies your on-chain activity — no name, no personal data, just proof.</p>
   </div>
@@ -235,14 +235,14 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0
 
       <div class="input-label">Your Midnight Wallet Address</div>
       <div class="input-wrap">
-        <input class="input-field" id="addr-input" type="text" placeholder="mn_addr_preprod1..." spellcheck="false" autocomplete="off"/>
-        <div class="input-hint">Preprod address — starts with mn_addr_preprod1</div>
+        <input class="input-field" id="addr-input" type="text" placeholder="0x… / addr1… / mn_addr_preprod1…" spellcheck="false" autocomplete="off"/>
+        <div class="input-hint">ETH · ADA · SOL · Midnight — any chain, one score</div>
       </div>
 
       <div class="status" id="status-msg"></div>
 
       <button class="btn btn-primary" id="verify-btn" onclick="verifyAddress()">
-        <span id="verify-btn-text">🔍 Verify on Midnight Preprod</span>
+        <span id="verify-btn-text">🔍 Verify Address</span>
       </button>
     </div>
 
@@ -461,190 +461,92 @@ async function queryIndexer(query, variables) {
   return data.data;
 }
 
+const NIGHT_ID_API = 'https://night-markets-94-production.up.railway.app';
+
+const CHAIN_ICONS = { eth:'⟠', sol:'◎', ada:'∞', midnight:'⬛' };
+const APP_ICONS = {
+  'night-markets':'🛒','night-poker':'🃏','night-fun':'🚀',
+  'night-lend':'💸','night-save':'🏦','night-work':'⚙️','night-biz':'🏢',
+};
+
+function detectChain(addr) {
+  if (/^0x[0-9a-fA-F]{40}$/.test(addr)) return 'eth';
+  if (addr.startsWith('addr1')) return 'ada';
+  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) && !addr.startsWith('mn_')) return 'sol';
+  return 'midnight';
+}
+
 async function verifyAddress() {
   const addr = document.getElementById('addr-input').value.trim();
+  if (!addr) { showStatus('Please enter your wallet address.', 'error'); return; }
 
-  if (!addr) { showStatus('Please enter your Midnight wallet address.', 'error'); return; }
-  if (!addr.startsWith('mn_addr_preprod') && !addr.startsWith('mn_addr_undeployed')) {
-    showStatus('Please enter a valid Preprod address starting with mn_addr_preprod1...', 'error');
-    return;
-  }
+  const chain = detectChain(addr);
 
   const btn = document.getElementById('verify-btn');
   btn.disabled = true;
-  document.getElementById('verify-btn-text').innerHTML = '<div class="spinner"></div> Querying Midnight Preprod...';
-  showStatus('🔍 Checking on-chain activity via Midnight indexer...', 'loading');
+  document.getElementById('verify-btn-text').innerHTML = '<div class="spinner"></div> Scoring…';
+  showStatus('🔍 Checking on-chain activity across chains…', 'loading');
 
   try {
-    // Query 1 — check unshielded transactions for this address
-    let txCount = 0;
-    let firstTxDate = null;
-    try {
-      const txQuery = `
-        query GetTransactions($addr: UnshieldedAddress!) {
-          unshieldedTransactions(address: $addr) {
-            nodes {
-              hash
-              block { timestamp }
-            }
-          }
-        }
-      `;
-      const txData = await queryIndexer(txQuery, {addr: addr});
-      if (txData?.unshieldedTransactions?.nodes) {
-        txCount = txData.unshieldedTransactions.nodes.length;
-        if (txCount > 0) {
-          const timestamps = txData.unshieldedTransactions.nodes
-            .map(n => n.block?.timestamp)
-            .filter(Boolean)
-            .sort();
-          if (timestamps.length > 0) firstTxDate = new Date(timestamps[0]);
-        }
-      }
-    } catch(e) {
-      // Transaction query might not be available — continue
-    }
+    const [scoreRes, appRes] = await Promise.allSettled([
+      fetch(`${NIGHT_ID_API}/api/nightid/score/${chain}/${encodeURIComponent(addr)}`),
+      fetch(`${NIGHT_ID_API}/api/nightid/action-score/${encodeURIComponent(addr)}`),
+    ]);
+    const scoreData = scoreRes.status === 'fulfilled' && scoreRes.value.ok ? await scoreRes.value.json() : null;
+    const appData   = appRes.status  === 'fulfilled' && appRes.value.ok  ? await appRes.value.json()  : null;
 
-    // Query 2 — check contract actions for Night Markets contract
-    let isNightDeployer = false;
-    let contractCount = 0;
-    let deployDate = null;
-    try {
-      const contractQuery = `
-        query GetContractActions($addr: HexEncoded!) {
-          contractActions(contractAddress: $addr) {
-            nodes {
-              __typename
-              ... on ContractDeploy {
-                transaction { block { timestamp } }
-              }
-            }
-          }
-        }
-      `;
-      const contractData = await queryIndexer(contractQuery, {addr: NIGHT_CONTRACT});
-      if (contractData?.contractActions?.nodes) {
-        const deploys = contractData.contractActions.nodes.filter(n => n.__typename === 'ContractDeploy');
-        if (deploys.length > 0) {
-          deployDate = new Date(deploys[0]?.transaction?.block?.timestamp);
-        }
-      }
-    } catch(e) {
-      // Continue without contract data
-    }
+    const chainScore = scoreData?.totalScore ?? 0;
+    const appScore   = appData?.total ?? 0;
+    const totalScore = chainScore + appScore;
 
-    // Check if this IS the Night Markets deployer address
-    const nightDeployerAddress = 'mn_addr_preprod1etmexcm6rhwqtp3a3suvfwjfp6993u0e27uraxts9k2pmt7rhlvqnu2njv';
-    const nightDeployerAddress2 = 'mn_addr_preprod1s74q2udqmzzpud9rdkp7txa8elx3nece3t29yn6av3tfw552wtss65llx5';
-
-    if (addr === nightDeployerAddress || addr === nightDeployerAddress2) {
-      isNightDeployer = true;
-      contractCount = 1;
-      deployDate = new Date('2026-04-01T12:48:54');
-      // ZK contract calls don't appear in unshielded tx query (privacy by design)
-      // Actual on-chain activity: 6 circuit calls + full escrow flow verified on explorer
-      txCount = 6;
-    }
-
-    // Calculate score
-    let score = 0;
     const actions = [];
 
-    if (isNightDeployer) {
-      score += SCORE_CONFIG.isNightMarkets;
-      actions.push({
-        icon: '⊘',
-        name: 'Night Markets Contract Deployed',
-        detail: 'ZK escrow marketplace — 6 circuits — Midnight Preprod — 01/04/2026',
-        pts: SCORE_CONFIG.isNightMarkets
+    if (scoreData?.breakdowns?.length) {
+      scoreData.breakdowns.forEach(b => {
+        actions.push({ icon: CHAIN_ICONS[chain] ?? '⛓️', name: b.label, detail: b.detail ?? chain.toUpperCase() + ' network', pts: b.pts ?? 0 });
       });
-    } else if (contractCount > 0) {
-      score += SCORE_CONFIG.contractDeploy * contractCount;
-      actions.push({
-        icon: '📜',
-        name: 'Smart Contract Deployed',
-        detail: `${contractCount} contract(s) on Midnight Preprod`,
-        pts: SCORE_CONFIG.contractDeploy * contractCount
-      });
+    } else if (chainScore > 0) {
+      actions.push({ icon: CHAIN_ICONS[chain] ?? '⛓️', name: 'On-chain Activity', detail: chain.toUpperCase() + ' address scored', pts: chainScore });
     }
 
-    if (txCount > 0) {
-      const txPts = txCount * SCORE_CONFIG.perZkTx;
-      score += txPts;
-      actions.push({
-        icon: '⛓️',
-        name: 'ZK Circuit Calls',
-        detail: `${txCount} on-chain ZK transactions verified — Midnight Preprod`,
-        pts: txPts
-      });
-    }
+    const byApp = appData?.byApp ?? {};
+    Object.entries(byApp).forEach(([appId, pts]) => {
+      if (pts > 0) {
+        const label = appId.replace('night-', 'Night ').replace(/\b\w/g, c => c.toUpperCase());
+        actions.push({ icon: APP_ICONS[appId] ?? '🌙', name: label, detail: 'Night ecosystem activity', pts });
+      }
+    });
 
-    if (isNightDeployer && txCount >= 6) {
-      score += SCORE_CONFIG.fullEscrowFlow;
-      actions.push({
-        icon: '🔐',
-        name: 'Full Escrow Flow Completed',
-        detail: 'createListing → fundEscrow → releaseEscrow — complete trade on-chain',
-        pts: SCORE_CONFIG.fullEscrowFlow
-      });
-    }
-
-    // If address found but no actions
     if (actions.length === 0) {
-      actions.push({
-        icon: '🌱',
-        name: 'Midnight Wallet Verified',
-        detail: 'Address exists on Midnight Preprod — start building to earn points',
-        pts: 0
-      });
+      actions.push({ icon: '🌱', name: 'Address Verified', detail: chain.toUpperCase() + ' address — use Night apps to build reputation', pts: 0 });
     }
 
-    showScore(addr, score, actions, deployDate || firstTxDate || new Date());
+    showScore(addr, totalScore, actions, new Date(), chain, appData?.appsUsed ?? 0);
 
   } catch (err) {
-    // Fallback — if indexer query fails, still show basic credential
-    console.warn('Indexer query issue:', err.message);
-    
-    const nightDeployerAddress = 'mn_addr_preprod1etmexcm6rhwqtp3a3suvfwjfp6993u0e27uraxts9k2pmt7rhlvqnu2njv';
-    const nightDeployerAddress2 = 'mn_addr_preprod1s74q2udqmzzpud9rdkp7txa8elx3nece3t29yn6av3tfw552wtss65llx5';
-    
-    let score = 0;
-    let actions = [];
-
-    if (addr === nightDeployerAddress || addr === nightDeployerAddress2) {
-      score = 200;
-      actions = [{
-        icon: '⊘',
-        name: 'Night Markets Contract Deployed',
-        detail: 'ZK escrow marketplace — 6 circuits — Midnight Preprod — 01/04/2026',
-        pts: 200
-      }];
-    } else {
-      actions = [{
-        icon: '🌱',
-        name: 'Midnight Address Verified',
-        detail: 'Valid Preprod address — build on Midnight to earn credentials',
-        pts: 0
-      }];
-    }
-
-    showScore(addr, score, actions, new Date());
+    showStatus('Scoring failed: ' + (err.message || 'API unavailable'), 'error');
   } finally {
     btn.disabled = false;
-    document.getElementById('verify-btn-text').innerHTML = '🔍 Verify on Midnight Preprod';
+    document.getElementById('verify-btn-text').innerHTML = '🔍 Verify Address';
   }
 }
 
-function showScore(addr, score, actions, date) {
+function showScore(addr, score, actions, date, chain = 'midnight', appsUsed = 0) {
   hideStatus();
   setStep(3);
 
   // Short address
-  const shortAddr = addr.slice(0, 20) + '...' + addr.slice(-8);
+  const shortAddr = addr.slice(0, 10) + '...' + addr.slice(-6);
 
-  // DID — deterministic from address
-  const didSuffix = addr.replace(/^mn_addr_preprod1/, '').slice(0, 20);
-  const did = 'did:midnight:preprod:' + didSuffix;
+  // DID — chain-aware
+  let did;
+  if (chain === 'eth')           did = 'did:ethr:' + addr.slice(0, 10) + '...' + addr.slice(-4);
+  else if (chain === 'ada')      did = 'did:ada:'  + addr.slice(0, 10) + '...' + addr.slice(-4);
+  else if (chain === 'sol')      did = 'did:sol:'  + addr.slice(0, 10) + '...' + addr.slice(-4);
+  else {
+    const didSuffix = addr.replace(/^mn_addr_preprod1/, '').slice(0, 20);
+    did = 'did:midnight:preprod:' + didSuffix;
+  }
 
   // NIGHT token rewards (1 NIGHT per 10 pts)
   const nightReward = Math.floor(score / 10);
@@ -661,7 +563,8 @@ function showScore(addr, score, actions, date) {
   document.getElementById('cf-night').textContent = nightReward + ' NIGHT';
   document.getElementById('cf-date').textContent = date.toLocaleDateString('en-AU');
   document.getElementById('cf-did').textContent = did;
-  document.getElementById('cred-sub').textContent = shortAddr + ' · Midnight Preprod';
+  const chainLabel = chain === 'midnight' ? 'Midnight Preprod' : chain.toUpperCase();
+  document.getElementById('cred-sub').textContent = shortAddr + ' · ' + chainLabel;
 
   // Score bar
   document.getElementById('score-bar-val').textContent = score + ' / ' + (score >= 1000 ? '1000' : nextLevel.min) + ' pts';
@@ -688,7 +591,7 @@ function showScore(addr, score, actions, date) {
   `).join('');
 
   // Share text
-  const shareText = `🪪 Night Builder Credential\n\nDID: ${did}\nScore: ${score} pts\nLevel: ${level.name}\nNIGHT Earned: ${nightReward} NIGHT\nNetwork: Midnight Preprod\nVerified: ${date.toLocaleDateString('en-AU')}\nEpoch: v1 · KYC Midnight\n\nVerify: kingmunz1994-lgtm.github.io/night-markets/night-identity.html\nBuilt on Midnight Network 🌙`;
+  const shareText = `🪪 Night Builder Credential\n\nDID: ${did}\nScore: ${score} pts\nLevel: ${level.name}\nNIGHT Earned: ${nightReward} NIGHT\nNetwork: ${chainLabel}\nApps Used: ${appsUsed}\nVerified: ${date.toLocaleDateString('en-AU')}\nEpoch: v1 · Multi-chain ZK Reputation\n\nVerify: kingmunz1994-lgtm.github.io/night-markets/night-identity.html\nBuilt on Midnight Network 🌙`;
   document.getElementById('share-text').textContent = shareText;
 
   // Show score section
@@ -960,5 +863,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(fetchFeedEvents, 30_000);
 });
 </script>
+<div id="eco-nav" style="background:rgba(5,3,8,.95);border-top:1px solid rgba(255,255,255,.07);padding:12px 24px;text-align:center;font-size:11px;font-family:monospace;"><span style="color:#4b5563;font-weight:700;margin-right:6px;">Night Ecosystem:</span><a href="https://kingmunz1994-lgtm.github.io/night-hub/" target="_blank" style="color:#a78bfa;text-decoration:none;margin:0 5px;padding:3px 8px;border:1px solid rgba(124,58,237,.25);border-radius:10px;">Hub</a><a href="https://kingmunz1994-lgtm.github.io/night-poker/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">Poker</a><a href="https://kingmunz1994-lgtm.github.io/night-fun/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">Fun</a><a href="https://kingmunz1994-lgtm.github.io/night-markets/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">Markets</a><a href="https://kingmunz1994-lgtm.github.io/night-id/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">ID</a><a href="https://kingmunz1994-lgtm.github.io/night-save/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">Save</a><a href="https://kingmunz1994-lgtm.github.io/night-lend/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">Lend</a><a href="https://kingmunz1994-lgtm.github.io/night-work/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">Work</a><a href="https://kingmunz1994-lgtm.github.io/night-biz/" target="_blank" style="color:#9ca3af;text-decoration:none;margin:0 5px;">Biz</a></div>
 </body>
 </html>
